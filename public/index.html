@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Qwen 27B Chat</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: #0f1117;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+
+        .app {
+            max-width: 900px;
+            height: 100vh;
+            margin: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 18px 20px;
+            border-bottom: 1px solid #292d36;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        #chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 25px;
+        }
+
+        .message {
+            margin-bottom: 22px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .user {
+            color: #8ab4ff;
+        }
+
+        .assistant {
+            color: #eeeeee;
+        }
+
+        .input-area {
+            padding: 15px;
+            border-top: 1px solid #292d36;
+            display: flex;
+            gap: 10px;
+        }
+
+        textarea {
+            flex: 1;
+            resize: none;
+            background: #191c24;
+            color: white;
+            border: 1px solid #363b47;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 16px;
+            outline: none;
+        }
+
+        button {
+            width: 90px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="app">
+
+    <header>
+        Qwen 3.8 27B
+    </header>
+
+    <div id="chat"></div>
+
+    <div class="input-area">
+
+        <textarea
+            id="input"
+            rows="2"
+            placeholder="Message Qwen..."
+        ></textarea>
+
+        <button id="send" onclick="sendMessage()">
+            Send
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const MODEL =
+    "qwen3.8-27b-uncensored-mtp:latest";
+
+const chat =
+    document.getElementById("chat");
+
+const input =
+    document.getElementById("input");
+
+const send =
+    document.getElementById("send");
+
+let messages = [];
+
+
+function addMessage(role, text) {
+
+    const div =
+        document.createElement("div");
+
+    div.className =
+        "message " + role;
+
+    div.textContent =
+        role === "user"
+            ? "You: " + text
+            : "Qwen: " + text;
+
+    chat.appendChild(div);
+
+    chat.scrollTop =
+        chat.scrollHeight;
+
+    return div;
+}
+
+
+async function sendMessage() {
+
+    const prompt =
+        input.value.trim();
+
+    if (!prompt) {
+        return;
+    }
+
+    input.value = "";
+
+    addMessage(
+        "user",
+        prompt
+    );
+
+    messages.push({
+        role: "user",
+        content: prompt
+    });
+
+    send.disabled = true;
+
+    const assistantMessage =
+        addMessage(
+            "assistant",
+            "Thinking..."
+        );
+
+
+    try {
+
+        /*
+         * IMPORTANT:
+         *
+         * Browser → Vercel /api/chat
+         *
+         * Vercel → Ollama
+         *
+         * Therefore the browser does NOT
+         * directly contact Cloudflare/Ollama.
+         */
+
+        const response =
+            await fetch(
+                "/api/chat",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        model: MODEL,
+
+                        messages: messages,
+
+                        stream: false
+
+                    })
+                }
+            );
+
+
+        if (!response.ok) {
+
+            const errorText =
+                await response.text();
+
+            throw new Error(
+                "HTTP " +
+                response.status +
+                ": " +
+                errorText
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        const answer =
+            data.message?.content ||
+            "No response received.";
+
+
+        assistantMessage.textContent =
+            "Qwen: " + answer;
+
+
+        messages.push({
+
+            role: "assistant",
+
+            content: answer
+
+        });
+
+
+    } catch (error) {
+
+        assistantMessage.textContent =
+            "Error: " +
+            error.message;
+
+        console.error(error);
+
+    }
+
+
+    send.disabled = false;
+
+    input.focus();
+}
+
+
+input.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (
+            event.key === "Enter" &&
+            !event.shiftKey
+        ) {
+
+            event.preventDefault();
+
+            sendMessage();
+
+        }
+
+    }
+);
+
+</script>
+
+</body>
+</html>
